@@ -286,7 +286,7 @@ class RoboticArm:
     async def _capture_challenge_view(self, frame_challenge: FrameLocator) -> Path:
         challenge_view = frame_challenge.locator("//div[@class='challenge-view']")
         cache_dir = self.config.cache_dir.joinpath("challenge_view")
-        current_time = datetime.now().strftime("%Y%m%d%H%M%S%f")
+        current_time = datetime.now().strftime("%Y%m%d/%Y%m%d%H%M%S%f")
         cache_path = cache_dir.joinpath(f"{current_time}.png")
         await challenge_view.screenshot(type="png", path=cache_path)
 
@@ -299,8 +299,15 @@ class RoboticArm:
         bbox = await challenge_view.bounding_box()
 
         # Save grid field
-        result = create_coordinate_grid(challenge_screenshot, bbox, y_line_space_num=20)
-        current_time = datetime.now().strftime("%Y%m%d%H%M%S%f")
+        result = create_coordinate_grid(
+            challenge_screenshot,
+            bbox,
+            x_line_space_num=11,
+            y_line_space_num=20,
+            color="gray",
+            adaptive_contrast=False,
+        )
+        current_time = datetime.now().strftime("%Y%m%d/%Y%m%d%H%M%S%f")
         grid_divisions = self.config.spatial_grid_cache.joinpath(f"{current_time}.png")
         grid_divisions.parent.mkdir(parents=True, exist_ok=True)
         plt.imsave(str(grid_divisions.resolve()), result)
@@ -554,7 +561,7 @@ class AgentV:
 
                         # Save captcha payload to json
                         try:
-                            current_time = datetime.now().strftime("%Y%m%d%H%M%S%f")
+                            current_time = datetime.now().strftime("%Y%m%d/%Y%m%d%H%M%S%f")
                             cache_path = self.config.cache_dir.joinpath(
                                 f"payload/{captcha_payload.request_type.value}/{current_time}.json"
                             )
@@ -613,20 +620,9 @@ class AgentV:
                     )
                 case RequestType.IMAGE_DRAG_DROP:
                     self.robotic_arm.signal_crumb_count = tasklist_length
-                    if not tasklist or not isinstance(tasklist, list):
-                        logger.warning("Invalid tasklist format in image_drag_drop")
-                        return await self.robotic_arm.check_challenge_type()
-                    first_task = tasklist[0]
-                    if not isinstance(first_task, dict) or "entities" not in first_task:
-                        logger.warning("Invalid first_task format in image_drag_drop")
-                        return await self.robotic_arm.check_challenge_type()
-                    entities = first_task["entities"]
-                    if not isinstance(entities, list):
-                        logger.warning("Entities is not a list in image_drag_drop")
-                        return await self.robotic_arm.check_challenge_type()
                     return (
                         ChallengeTypeEnum.IMAGE_DRAG_SINGLE
-                        if len(entities) == 1
+                        if len(tasklist[0].entities) == 1
                         else ChallengeTypeEnum.IMAGE_DRAG_MULTI
                     )
 

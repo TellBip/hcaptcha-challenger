@@ -47,6 +47,8 @@ class SpatialPointReasoner:
         grid_divisions: Union[str, Path, os.PathLike],
         auxiliary_information: str | None = "",
         model: SCoTModelType = "gemini-2.5-pro-exp-03-25",
+        *,
+        enable_response_schema: bool = False,
     ) -> ImageAreaSelectChallenge:
         # Initialize Gemini client with API key
         client = genai.Client(api_key=self._api_key)
@@ -58,6 +60,11 @@ class SpatialPointReasoner:
         ]
 
         # Create content with only the image
+        # When the model performs inference, the image will also be converted into the corresponding Image Token.
+        # When the context of a dialogue is long, the model may focus on the backward Prompt.
+        # Therefore, when writing Prompt, you can say that the instructions are placed at the end
+        # and the images are placed at the head, so that the model can pay more attention to the instructions,
+        # thereby improving the effect of the instructions following.
         parts = [
             types.Part.from_uri(file_uri=files[0].uri, mime_type=files[0].mime_type),
             types.Part.from_uri(file_uri=files[1].uri, mime_type=files[1].mime_type),
@@ -68,7 +75,7 @@ class SpatialPointReasoner:
         contents = [types.Content(role="user", parts=parts)]
 
         # Change to JSON mode
-        if model in ["gemini-2.0-flash-thinking-exp-01-21"]:
+        if not enable_response_schema:
             response = client.models.generate_content(
                 model=model,
                 contents=contents,
