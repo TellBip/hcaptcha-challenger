@@ -1,10 +1,10 @@
 # https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#dependencies-optional-dependencies
 [project]
 name = "hcaptcha-challenger"
-version = "0.14.6"
+version = "0.15.1"
 dependencies = [
     "pytz",
-    "httpx",
+    "httpx[http2]",
     "loguru",
     "pydantic-settings",
     "playwright",
@@ -15,6 +15,7 @@ dependencies = [
     "pillow>=11.1.0",
     "msgpack>=1.1.0",
     "tenacity>=9.1.2",
+    "typer>=0.15.2",
 ]
 requires-python = ">=3.10"
 authors = [
@@ -51,6 +52,12 @@ Changelog = "https://github.com/QIN2DIM/hcaptcha-challenger/blob/master/CHANGELO
 server = [
     "fastapi[all]>=0.115.12",
 ]
+dataset = [
+    "typer"
+]
+
+[project.scripts]
+hc = "hcaptcha_challenger.cli.main:main"
 
 # https://packaging.python.org/en/latest/key_projects/#hatch
 # https://hatch.pypa.io/latest/config/build/#build-system
