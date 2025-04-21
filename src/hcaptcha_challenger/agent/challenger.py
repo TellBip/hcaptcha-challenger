@@ -24,6 +24,7 @@ from playwright.async_api import Locator, expect, Page, Response, TimeoutError, 
 from pydantic import Field, field_validator, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from hcaptcha_challenger.agent.prompts import match_user_prompt
 from hcaptcha_challenger.helper import create_coordinate_grid
 from hcaptcha_challenger.models import (
     CaptchaResponse,
@@ -116,7 +117,8 @@ class AgentConfig(BaseSettings):
     cache_dir: Path = Path("tmp/.cache")
     challenge_dir: Path = Path("tmp/.challenge")
     captcha_response_dir: Path = Path("tmp/.captcha")
-    ignore_request_types: List[RequestType] | None = Field(default_factory=list)
+    ignore_request_types: List[RequestType | ChallengeTypeEnum] | None = Field(default_factory=list)
+    ignore_request_questions: List[str] | None = Field(default_factory=list)
 
     EXECUTION_TIMEOUT: float = Field(
         default=120,
@@ -134,6 +136,9 @@ class AgentConfig(BaseSettings):
         description="When your local network is poor, increase this value appropriately [unit: millisecond]",
     )
 
+    CONSTRAINT_RESPONSE_SCHEMA: bool = Field(
+        default=True, description="Whether to enable constraint encoding"
+    )
     CHALLENGE_CLASSIFIER_MODEL: FastShotModelType = Field(
         default='gemini-2.0-flash',
         description="For the challenge classification task \n"
@@ -203,7 +208,7 @@ class AgentConfig(BaseSettings):
 
         cache_key = self.challenge_dir.joinpath(
             captcha_payload.request_type.value,
-            captcha_payload.requester_question.get("en", "unknown"),
+            captcha_payload.get_requester_question(),
             current_time,
         )
 
@@ -347,7 +352,7 @@ class RoboticArm:
         crumbs = frame_challenge.locator("//div[@class='Crumb']")
         return 2 if await crumbs.first.is_visible() else 1
 
-    async def check_challenge_type(self) -> RequestType | ChallengeTypeEnum:
+    async def check_challenge_type(self) -> RequestType | ChallengeTypeEnum | None:
         # fixme
         with suppress(Exception):
             await self.page.wait_for_selector(self.challenge_selector, timeout=1000)
@@ -411,7 +416,7 @@ class RoboticArm:
         result = create_coordinate_grid(
             challenge_screenshot,
             bbox,
-            x_line_space_num=11,
+            x_line_space_num=15,
             y_line_space_num=20,
             color="gray",
             adaptive_contrast=False,
@@ -489,11 +494,16 @@ class RoboticArm:
 
             # Image classification
             response = self._image_classifier.invoke(
-                challenge_screenshot=challenge_screenshot, model=self.config.IMAGE_CLASSIFIER_MODEL
+                challenge_screenshot=challenge_screenshot,
+                model=self.config.IMAGE_CLASSIFIER_MODEL,
+                constraint_response_schema=self.config.CONSTRAINT_RESPONSE_SCHEMA,
             )
             boolean_matrix = response.convert_box_to_boolean_matrix()
 
             logger.debug(f'[{cid+1}/{crumb_count}]ToolInvokeMessage: {response.log_message}')
+            self._image_classifier.cache_response(
+                path=cache_key.joinpath(f"{cache_key.name}_{cid}_model_answer.json")
+            )
 
             # drive the browser to work on the challenge
             positive_cases = 0
@@ -522,13 +532,25 @@ class RoboticArm:
 
             raw, projection = await self._capture_spatial_mapping(frame_challenge, cache_key, cid)
 
+            auxiliary_information = None
+            try:
+                auxiliary_information = match_user_prompt(
+                    job_type, self.captcha_payload.get_requester_question()
+                )
+            except Exception as e:
+                logger.warning(f"Error while processing captcha payload: {e}")
+
             response = self._spatial_path_reasoner.invoke(
                 challenge_screenshot=raw,
                 grid_divisions=projection,
                 model=self.config.SPATIAL_PATH_REASONER_MODEL,
-                auxiliary_information=f"JobType: {job_type.value}",
+                auxiliary_information=auxiliary_information,
+                constraint_response_schema=self.config.CONSTRAINT_RESPONSE_SCHEMA,
             )
             logger.debug(f'[{cid+1}/{crumb_count}]ToolInvokeMessage: {response.log_message}')
+            self._spatial_path_reasoner.cache_response(
+                path=cache_key.joinpath(f"{cache_key.name}_{cid}_model_answer.json")
+            )
 
             for path in response.paths:
                 await self._perform_drag_drop(path)
@@ -559,8 +581,12 @@ class RoboticArm:
                 grid_divisions=projection,
                 model=self.config.SPATIAL_POINT_REASONER_MODEL,
                 auxiliary_information=user_prompt,
+                constraint_response_schema=self.config.CONSTRAINT_RESPONSE_SCHEMA,
             )
             logger.debug(f'[{cid+1}/{crumb_count}]ToolInvokeMessage: {response.log_message}')
+            self._spatial_point_reasoner.cache_response(
+                path=cache_key.joinpath(f"{cache_key.name}_{cid}_model_answer.json")
+            )
 
             for point in response.points:
                 await self.page.mouse.click(point.x, point.y, delay=180)
@@ -740,24 +766,53 @@ class AgentV:
         )
 
         try:
+            # {{< Skip specific challenge questions >}}
+            with suppress(Exception):
+                if self.config.ignore_request_questions and self._captcha_payload:
+                    for q in self.config.ignore_request_questions:
+                        if q in self._captcha_payload.get_requester_question():
+                            await self.page.wait_for_timeout(2000)
+                            await self.robotic_arm.refresh_challenge()
+                            return await self._solve_captcha()
+
+            # {{< challenge start >}}
             match challenge_type:
                 case RequestType.IMAGE_LABEL_BINARY:
                     if RequestType.IMAGE_LABEL_BINARY not in self.config.ignore_request_types:
                         return await self.robotic_arm.challenge_image_label_binary()
-                case (
-                    challenge_type.IMAGE_LABEL_SINGLE_SELECT
-                    | challenge_type.IMAGE_LABEL_MULTI_SELECT
-                ):
-                    if RequestType.IMAGE_LABEL_AREA_SELECT not in self.config.ignore_request_types:
+                case challenge_type.IMAGE_LABEL_SINGLE_SELECT:
+                    if (
+                        RequestType.IMAGE_LABEL_AREA_SELECT not in self.config.ignore_request_types
+                        and challenge_type.IMAGE_LABEL_SINGLE_SELECT
+                        not in self.config.ignore_request_types
+                    ):
+                        return await self.robotic_arm.challenge_image_label_select(challenge_type)
+                case challenge_type.IMAGE_LABEL_MULTI_SELECT:
+                    if (
+                        RequestType.IMAGE_LABEL_AREA_SELECT not in self.config.ignore_request_types
+                        and challenge_type.IMAGE_LABEL_MULTI_SELECT
+                        not in self.config.ignore_request_types
+                    ):
                         return await self.robotic_arm.challenge_image_label_select(challenge_type)
                 case challenge_type.IMAGE_DRAG_SINGLE:
-                    if RequestType.IMAGE_DRAG_DROP not in self.config.ignore_request_types:
+                    if (
+                        RequestType.IMAGE_DRAG_DROP not in self.config.ignore_request_types
+                        and ChallengeTypeEnum.IMAGE_DRAG_SINGLE
+                        not in self.config.ignore_request_types
+                    ):
                         return await self.robotic_arm.challenge_image_drag_drop(challenge_type)
                 case challenge_type.IMAGE_DRAG_MULTI:
-                    logger.warning(f"Not yet supported challenge: {challenge_type.value}")
+                    if (
+                        RequestType.IMAGE_DRAG_DROP not in self.config.ignore_request_types
+                        and ChallengeTypeEnum.IMAGE_DRAG_MULTI
+                        not in self.config.ignore_request_types
+                    ):
+                        return await self.robotic_arm.challenge_image_drag_drop(challenge_type)
+                # {{< HCI >}}
                 case _:
                     # todo Agentic Workflow | zero-shot challenge
                     logger.warning(f"Unknown types of challenges: {challenge_type}")
+            # {{< challenge end >}}
 
             await self.page.wait_for_timeout(2000)
             await self.robotic_arm.refresh_challenge()

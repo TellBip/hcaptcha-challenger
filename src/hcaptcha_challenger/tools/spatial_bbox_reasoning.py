@@ -1,4 +1,3 @@
-import json
 import os
 from pathlib import Path
 from typing import Union
@@ -10,6 +9,7 @@ from tenacity import retry, stop_after_attempt, wait_fixed
 
 from hcaptcha_challenger.models import SCoTModelType, ImageBboxChallenge
 from hcaptcha_challenger.tools.common import extract_first_json_block
+from hcaptcha_challenger.tools.reasoner import _Reasoner
 
 SYSTEM_INSTRUCTIONS = """
 <Instruction>
@@ -33,18 +33,15 @@ Finally, output the original challenge prompt and the absolute pixel bounding bo
 """
 
 
-class SpatialBboxReasoner:
-    def __init__(self, gemini_api_key: str):
-        """Initialize the classifier with a Gemini API key."""
-        self._api_key = gemini_api_key
+class SpatialBboxReasoner(_Reasoner):
 
-    # @retry(
-    #     stop=stop_after_attempt(3),
-    #     wait=wait_fixed(3),
-    #     before_sleep=lambda retry_state: logger.warning(
-    #         f"Retry request ({retry_state.attempt_number}/2) - Wait 3 seconds - Exception: {retry_state.outcome.exception()}"
-    #     ),
-    # )
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_fixed(3),
+        before_sleep=lambda retry_state: logger.warning(
+            f"Retry request ({retry_state.attempt_number}/2) - Wait 3 seconds - Exception: {retry_state.outcome.exception()}"
+        ),
+    )
     def invoke(
         self,
         challenge_screenshot: Union[str, Path, os.PathLike],
@@ -52,8 +49,13 @@ class SpatialBboxReasoner:
         auxiliary_information: str | None = "",
         model: SCoTModelType = "gemini-2.5-pro-exp-03-25",
         *,
-        enable_response_schema: bool = False,
+        constraint_response_schema: bool = False,
+        **kwargs,
     ) -> ImageBboxChallenge:
+        enable_response_schema = kwargs.get("enable_response_schema")
+        if enable_response_schema is not None:
+            constraint_response_schema = enable_response_schema
+
         # Initialize Gemini client with API key
         client = genai.Client(api_key=self._api_key)
 
@@ -74,8 +76,8 @@ class SpatialBboxReasoner:
         contents = [types.Content(role="user", parts=parts)]
 
         # Change to JSON mode
-        if not enable_response_schema or model in ["gemini-2.0-flash-thinking-exp-01-21"]:
-            response = client.models.generate_content(
+        if not constraint_response_schema or model in ["gemini-2.0-flash-thinking-exp-01-21"]:
+            self._response = client.models.generate_content(
                 model=model,
                 contents=contents,
                 config=types.GenerateContentConfig(
@@ -83,10 +85,10 @@ class SpatialBboxReasoner:
                 ),
             )
 
-            return ImageBboxChallenge(**extract_first_json_block(response.text))
+            return ImageBboxChallenge(**extract_first_json_block(self._response.text))
 
         # Structured output with Constraint encoding
-        response = client.models.generate_content(
+        self._response = client.models.generate_content(
             model=model,
             contents=contents,
             config=types.GenerateContentConfig(
@@ -96,7 +98,6 @@ class SpatialBboxReasoner:
                 response_schema=ImageBboxChallenge,
             ),
         )
-        print(json.dumps(response.model_dump(mode="json"), indent=2, ensure_ascii=False))
-        if _result := response.parsed:
-            return ImageBboxChallenge(**response.parsed.model_dump())
-        return ImageBboxChallenge(**extract_first_json_block(response.text))
+        if _result := self._response.parsed:
+            return ImageBboxChallenge(**self._response.parsed.model_dump())
+        return ImageBboxChallenge(**extract_first_json_block(self._response.text))

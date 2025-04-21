@@ -11,6 +11,39 @@ from typing import Literal, List, Dict, Any
 
 from pydantic import BaseModel, Field
 
+BAD_CODE = {
+    "а": "a",
+    "е": "e",
+    "e": "e",
+    "i": "i",
+    "і": "i",
+    "ο": "o",
+    "с": "c",
+    "ԁ": "d",
+    "ѕ": "s",
+    "һ": "h",
+    "у": "y",
+    "р": "p",
+    "ϳ": "j",
+    "х": "x",
+    "\u0405": "S",
+    "\u0042": "B",
+    "\u0052": "R",
+    "\u0049": "I",
+    "\u0043": "C",
+    "\u004b": "K",
+    "\u039a": "K",
+    "\u0053": "S",
+    "\u0421": "C",
+    "\u006c": "l",
+    "\u0399": "I",
+    "\u0392": "B",
+    "ー": "一",
+    "土": "士",
+}
+
+INV = {"\\", "/", ":", "*", "?", "<", ">", "|", "\n"}
+
 
 class ChallengeSignal(str, Enum):
     """
@@ -85,6 +118,12 @@ class CaptchaPayload(BaseModel):
     normalized: bool | None = Field(default=None)
     c: Token = Field(default_factory=dict)
 
+    def get_requester_question(self, language: str = "en") -> str:
+        rq = self.requester_question.get(language, "unknown")
+        for i in BAD_CODE:
+            rq = rq.replace(i, BAD_CODE[i])
+        return rq
+
 
 class CaptchaResponse(BaseModel):
 
@@ -154,6 +193,8 @@ SCoTModelType = Literal[
     # The following is a free experimental model that may fail at any time and is for demo only
     "gemini-2.5-pro-exp-03-25",
     "gemini-2.0-flash-thinking-exp-01-21",
+    # "learnlm-2.0-flash-experimental",
+    "gemini-2.5-flash-preview-04-17",
 ]
 
 FastShotModelType = Literal[
@@ -161,12 +202,16 @@ FastShotModelType = Literal[
     "gemini-2.0-flash",
     # https://ai.google.dev/gemini-api/docs/models#gemini-2.0-flash-lite
     "gemini-2.0-flash-lite",
+    # https://ai.google.dev/gemini-api/docs/models?hl=zh-cn#gemini-2.5-flash-preview
+    "gemini-2.5-flash-preview-04-17",
 ]
 
 
 class BoundingBoxCoordinate(BaseModel):
     box_2d: List[int] = Field(
-        description="It can only be in planar coordinate format, e.g. [0,2] for the 3rd element in the first row"
+        description="It can only be in planar coordinate format, e.g. [0,2] for the 3rd element in the first row",
+        min_length=2,
+        max_length=2,
     )
 
 
