@@ -1,5 +1,4 @@
 import os
-from enum import Enum
 from pathlib import Path
 from typing import Union
 
@@ -8,7 +7,7 @@ from google.genai import types
 from loguru import logger
 from tenacity import retry, stop_after_attempt, wait_fixed
 
-from hcaptcha_challenger.models import FastShotModelType
+from hcaptcha_challenger.models import FastShotModelType, ChallengeTypeEnum
 from hcaptcha_challenger.tools.reasoner import _Reasoner
 
 CHALLENGE_CLASSIFIER_INSTRUCTIONS = """
@@ -49,7 +48,7 @@ Output: `image_drag_multi`
 """
 
 USER_PROMPT = """
-Your task is to classify challenge questions into one of four types: 
+Your task is to classify challenge questions into one of four types:
     - image_label_single_select (clicking ONE specific area/object)
     - image_label_multi_select (clicking MULTIPLE areas/objects)
     - image_drag_single (dragging ONE element/piece)
@@ -57,14 +56,10 @@ Your task is to classify challenge questions into one of four types:
 """
 
 
-class ChallengeTypeEnum(str, Enum):
-    IMAGE_LABEL_SINGLE_SELECT = "image_label_single_select"
-    IMAGE_LABEL_MULTI_SELECT = "image_label_multi_select"
-    IMAGE_DRAG_SINGLE = "image_drag_single"
-    IMAGE_DRAG_MULTI = "image_drag_multi"
+class ChallengeClassifier(_Reasoner[FastShotModelType]):
 
-
-class ChallengeClassifier(_Reasoner):
+    def __init__(self, gemini_api_key: str, model: FastShotModelType = "gemini-2.0-flash"):
+        super().__init__(gemini_api_key, model)
 
     @retry(
         stop=stop_after_attempt(3),
@@ -73,19 +68,21 @@ class ChallengeClassifier(_Reasoner):
             f"Retry request ({retry_state.attempt_number}/2) - Wait 3 seconds - Exception: {retry_state.outcome.exception()}"
         ),
     )
-    def invoke(
-        self,
-        challenge_screenshot: Union[str, Path, os.PathLike],
-        model: FastShotModelType = "gemini-2.0-flash",
+    async def invoke_async(
+        self, challenge_screenshot: Union[str, Path, os.PathLike], **kwargs
     ) -> ChallengeTypeEnum:
+        model_to_use = kwargs.pop("model", self._model)
+        if model_to_use is None:
+            raise ValueError("Model must be provided either at initialization or via kwargs.")
+
         # Initialize Gemini client with API key
         client = genai.Client(api_key=self._api_key)
 
         # Upload the challenge image file
-        files = [client.files.upload(file=challenge_screenshot)]
+        files = [await client.aio.files.upload(file=challenge_screenshot)]
 
         # Handle models that don't support JSON response schema
-        if model in ["gemini-2.0-flash-thinking-exp-01-21"]:
+        if model_to_use in ["gemini-2.0-flash-thinking-exp-01-21"]:
             # Create content with only the image
             contents = [
                 types.Content(
@@ -96,8 +93,8 @@ class ChallengeClassifier(_Reasoner):
                 )
             ]
             # Generate response using thinking prompt
-            self._response = client.models.generate_content(
-                model=model,
+            self._response = await client.aio.models.generate_content(
+                model=model_to_use,
                 contents=contents,
                 config=types.GenerateContentConfig(
                     temperature=0, system_instruction=CHALLENGE_CLASSIFIER_INSTRUCTIONS
@@ -117,8 +114,8 @@ class ChallengeClassifier(_Reasoner):
             )
         ]
         # Generate structured JSON response
-        self._response = client.models.generate_content(
-            model=model,
+        self._response = await client.aio.models.generate_content(
+            model=model_to_use,
             contents=contents,
             config=types.GenerateContentConfig(
                 temperature=0, response_mime_type="text/x.enum", response_schema=ChallengeTypeEnum

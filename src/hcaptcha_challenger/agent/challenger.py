@@ -13,7 +13,7 @@ from asyncio import Queue
 from contextlib import suppress
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 from typing import List, Tuple
 from uuid import uuid4
 
@@ -24,7 +24,6 @@ from playwright.async_api import Locator, expect, Page, Response, TimeoutError, 
 from pydantic import Field, field_validator, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from hcaptcha_challenger.agent.prompts import match_user_prompt
 from hcaptcha_challenger.helper import create_coordinate_grid
 from hcaptcha_challenger.models import (
     CaptchaResponse,
@@ -36,13 +35,14 @@ from hcaptcha_challenger.models import (
     CaptchaPayload,
     IGNORE_REQUEST_TYPE_LITERAL,
 )
+from hcaptcha_challenger.models import ChallengeTypeEnum
+from hcaptcha_challenger.prompts import match_user_prompt
 from hcaptcha_challenger.tools import (
     ImageClassifier,
     ChallengeClassifier,
     SpatialPathReasoner,
     SpatialPointReasoner,
 )
-from hcaptcha_challenger.tools.challenge_classifier import ChallengeTypeEnum
 
 
 def _generate_bezier_trajectory(
@@ -244,17 +244,24 @@ class RoboticArm:
         self.page = page
         self.config = config
 
-        self._image_classifier = ImageClassifier(
-            gemini_api_key=self.config.GEMINI_API_KEY.get_secret_value()
-        )
         self._challenge_classifier = ChallengeClassifier(
-            gemini_api_key=self.config.GEMINI_API_KEY.get_secret_value()
+            gemini_api_key=self.config.GEMINI_API_KEY.get_secret_value(),
+            model=self.config.CHALLENGE_CLASSIFIER_MODEL,
+        )
+        self._image_classifier = ImageClassifier(
+            gemini_api_key=self.config.GEMINI_API_KEY.get_secret_value(),
+            model=self.config.IMAGE_CLASSIFIER_MODEL,
+            constraint_response_schema=self.config.CONSTRAINT_RESPONSE_SCHEMA,
         )
         self._spatial_path_reasoner = SpatialPathReasoner(
-            gemini_api_key=self.config.GEMINI_API_KEY.get_secret_value()
+            gemini_api_key=self.config.GEMINI_API_KEY.get_secret_value(),
+            model=self.config.SPATIAL_PATH_REASONER_MODEL,
+            constraint_response_schema=self.config.CONSTRAINT_RESPONSE_SCHEMA,
         )
         self._spatial_point_reasoner = SpatialPointReasoner(
-            gemini_api_key=self.config.GEMINI_API_KEY.get_secret_value()
+            gemini_api_key=self.config.GEMINI_API_KEY.get_secret_value(),
+            model=self.config.SPATIAL_POINT_REASONER_MODEL,
+            constraint_response_schema=self.config.CONSTRAINT_RESPONSE_SCHEMA,
         )
         self.signal_crumb_count: int | None = None
         self.captcha_payload: CaptchaPayload | None = None
@@ -382,10 +389,11 @@ class RoboticArm:
             cache_path = self.config.cache_dir.joinpath(f"challenge_view/_artifacts/{uuid4()}.png")
             cache_path.parent.mkdir(parents=True, exist_ok=True)
             await challenge_view.screenshot(type="png", path=cache_path)
-            challenge_type = self._challenge_classifier.invoke(
-                challenge_screenshot=cache_path, model=self.config.CHALLENGE_CLASSIFIER_MODEL
+            challenge_type = await self._challenge_classifier.invoke_async(
+                challenge_screenshot=cache_path
             )
             return challenge_type
+        return None
 
     async def _wait_for_all_loaders_complete(self):
         """Wait for all loading indicators to complete (become invisible)"""
@@ -515,10 +523,8 @@ class RoboticArm:
             await challenge_view.screenshot(type="png", path=challenge_screenshot)
 
             # Image classification
-            response = self._image_classifier.invoke(
-                challenge_screenshot=challenge_screenshot,
-                model=self.config.IMAGE_CLASSIFIER_MODEL,
-                constraint_response_schema=self.config.CONSTRAINT_RESPONSE_SCHEMA,
+            response = await self._image_classifier.invoke_async(
+                challenge_screenshot=challenge_screenshot
             )
             boolean_matrix = response.convert_box_to_boolean_matrix()
 
@@ -562,12 +568,10 @@ class RoboticArm:
             except Exception as e:
                 logger.warning(f"Error while processing captcha payload: {e}")
 
-            response = self._spatial_path_reasoner.invoke(
+            response = await self._spatial_path_reasoner.invoke_async(
                 challenge_screenshot=raw,
                 grid_divisions=projection,
-                model=self.config.SPATIAL_PATH_REASONER_MODEL,
                 auxiliary_information=auxiliary_information,
-                constraint_response_schema=self.config.CONSTRAINT_RESPONSE_SCHEMA,
             )
             logger.debug(f'[{cid+1}/{crumb_count}]ToolInvokeMessage: {response.log_message}')
             self._spatial_path_reasoner.cache_response(
@@ -598,12 +602,10 @@ class RoboticArm:
             elif job_type == ChallengeTypeEnum.IMAGE_LABEL_SINGLE_SELECT:
                 user_prompt += "\nIf you answer correctly, I will reward you with a tip of $20."
 
-            response = self._spatial_point_reasoner.invoke(
+            response = await self._spatial_point_reasoner.invoke_async(
                 challenge_screenshot=raw,
                 grid_divisions=projection,
-                model=self.config.SPATIAL_POINT_REASONER_MODEL,
                 auxiliary_information=user_prompt,
-                constraint_response_schema=self.config.CONSTRAINT_RESPONSE_SCHEMA,
             )
             logger.debug(f'[{cid+1}/{crumb_count}]ToolInvokeMessage: {response.log_message}')
             self._spatial_point_reasoner.cache_response(

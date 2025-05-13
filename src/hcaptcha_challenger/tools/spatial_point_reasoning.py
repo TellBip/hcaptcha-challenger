@@ -1,4 +1,4 @@
-import json
+import asyncio
 import os
 from pathlib import Path
 from typing import Union
@@ -43,7 +43,15 @@ Finally, solve the challenge, locate the object, output the coordinates of the c
 """
 
 
-class SpatialPointReasoner(_Reasoner):
+class SpatialPointReasoner(_Reasoner[SCoTModelType]):
+
+    def __init__(
+        self,
+        gemini_api_key: str,
+        model: SCoTModelType = "gemini-2.5-pro-exp-03-25",
+        constraint_response_schema: bool = False,
+    ):
+        super().__init__(gemini_api_key, model, constraint_response_schema)
 
     @retry(
         stop=stop_after_attempt(3),
@@ -52,16 +60,22 @@ class SpatialPointReasoner(_Reasoner):
             f"Retry request ({retry_state.attempt_number}/2) - Wait 3 seconds - Exception: {retry_state.outcome.exception()}"
         ),
     )
-    def invoke(
+    async def invoke_async(
         self,
         challenge_screenshot: Union[str, Path, os.PathLike],
+        *,
         grid_divisions: Union[str, Path, os.PathLike],
         auxiliary_information: str | None = "",
-        model: SCoTModelType = "gemini-2.5-pro-exp-03-25",
-        *,
-        constraint_response_schema: bool = False,
+        constraint_response_schema: bool | None = None,
         **kwargs,
     ) -> ImageAreaSelectChallenge:
+        model_to_use = kwargs.pop("model", self._model)
+        if model_to_use is None:
+            raise ValueError("Model must be provided either at initialization or via kwargs.")
+
+        if constraint_response_schema is None:
+            constraint_response_schema = self._constraint_response_schema
+
         enable_response_schema = kwargs.get("enable_response_schema")
         if enable_response_schema is not None:
             constraint_response_schema = enable_response_schema
@@ -70,10 +84,10 @@ class SpatialPointReasoner(_Reasoner):
         client = genai.Client(api_key=self._api_key)
 
         # Upload the challenge image file
-        files = [
-            client.files.upload(file=challenge_screenshot),
-            client.files.upload(file=grid_divisions),
-        ]
+        files = await asyncio.gather(
+            client.aio.files.upload(file=challenge_screenshot),
+            client.aio.files.upload(file=grid_divisions),
+        )
 
         # Create content with only the image
         # When the model performs inference, the image will also be converted into the corresponding Image Token.
@@ -90,27 +104,27 @@ class SpatialPointReasoner(_Reasoner):
 
         contents = [types.Content(role="user", parts=parts)]
 
+        system_instruction = THINKING_PROMPT
+        config = types.GenerateContentConfig(temperature=0, system_instruction=system_instruction)
+
+        if model_to_use in ["gemini-2.5-flash-preview-04-17"]:
+            config.thinking_config = types.ThinkingConfig(thinking_budget=0)
+
         # Change to JSON mode
-        if not constraint_response_schema or model in ["gemini-2.0-flash-thinking-exp-01-21"]:
-            self._response = client.models.generate_content(
-                model=model,
-                contents=contents,
-                config=types.GenerateContentConfig(
-                    temperature=0, system_instruction=THINKING_PROMPT
-                ),
+        if not constraint_response_schema or model_to_use in [
+            "gemini-2.0-flash-thinking-exp-01-21"
+        ]:
+            self._response = await client.aio.models.generate_content(
+                model=model_to_use, contents=contents, config=config
             )
             return ImageAreaSelectChallenge(**extract_first_json_block(self._response.text))
 
+        config.response_mime_type = "application/json"
+        config.response_schema = ImageAreaSelectChallenge
+
         # Structured output with Constraint encoding
-        self._response = client.models.generate_content(
-            model=model,
-            contents=contents,
-            config=types.GenerateContentConfig(
-                temperature=0,
-                system_instruction=THINKING_PROMPT,
-                response_mime_type="application/json",
-                response_schema=ImageAreaSelectChallenge,
-            ),
+        self._response = await client.aio.models.generate_content(
+            model=model_to_use, contents=contents, config=config
         )
         if _result := self._response.parsed:
             return ImageAreaSelectChallenge(**self._response.parsed.model_dump())

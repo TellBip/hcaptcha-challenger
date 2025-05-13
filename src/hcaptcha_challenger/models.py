@@ -185,6 +185,13 @@ class RequestType(str, Enum):
     MULTI_CHALLENGE = "multi_challenge"
 
 
+class ChallengeTypeEnum(str, Enum):
+    IMAGE_LABEL_SINGLE_SELECT = "image_label_single_select"
+    IMAGE_LABEL_MULTI_SELECT = "image_label_multi_select"
+    IMAGE_DRAG_SINGLE = "image_drag_single"
+    IMAGE_DRAG_MULTI = "image_drag_multi"
+
+
 IGNORE_REQUEST_TYPE_LITERAL = Literal[
     "image_label_binary",
     "image_label_area_select",
@@ -199,6 +206,7 @@ IGNORE_REQUEST_TYPE_LITERAL = Literal[
 SCoTModelType = Literal[
     # This model is not available in the free plan.
     # Recommended for production environments for more tolerant rate limits.
+    "gemini-2.5-pro-preview-05-06",
     "gemini-2.5-pro-preview-03-25",
     # The following is a free experimental model that may fail at any time and is for demo only
     "gemini-2.5-pro-exp-03-25",
@@ -223,6 +231,38 @@ class BoundingBoxCoordinate(BaseModel):
         min_length=2,
         max_length=2,
     )
+
+    def model_post_init(self, context: Any, /) -> None:
+        val_for_x = self.box_2d[0]
+        val_for_y = self.box_2d[1]
+
+        # Determine the new x-coordinate
+        if not (0 <= val_for_x <= 2):
+            if val_for_x < 0:
+                new_x = 0
+            elif val_for_x < 333:
+                new_x = 0
+            elif val_for_x < 667:
+                new_x = 1
+            else:
+                new_x = 2
+        else:
+            new_x = val_for_x
+
+        # Determine the new y-coordinate
+        if not (0 <= val_for_y <= 2):
+            if val_for_y < 0:
+                new_y = 0
+            elif val_for_y < 333:
+                new_y = 0
+            elif val_for_y < 667:
+                new_y = 1
+            else:
+                new_y = 2
+        else:
+            new_y = val_for_y
+
+        self.box_2d = [new_x, new_y]
 
 
 class ImageBinaryChallenge(BaseModel):
@@ -324,3 +364,29 @@ class ImageBboxChallenge(BaseModel):
     @property
     def log_message(self) -> str:
         return json.dumps(self.model_dump(mode="json"), indent=2, ensure_ascii=False)
+
+
+SPATIAL_PATH_STRUCTURED_OUTPUT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "challenge_prompt": {"type": "string"},
+        "paths": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "start_point": {
+                        "type": "object",
+                        "properties": {"x": {"type": "integer"}, "y": {"type": "integer"}},
+                    },
+                    "end_point": {
+                        "type": "object",
+                        "properties": {"x": {"type": "integer"}, "y": {"type": "integer"}},
+                    },
+                },
+                "required": ["start_point", "end_point"],
+            },
+        },
+    },
+    "required": ["challenge_prompt", "paths"],
+}
