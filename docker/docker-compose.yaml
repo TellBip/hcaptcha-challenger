@@ -14,4 +14,5 @@ services:
       - .env
     environment:
       <<: *runtime_args
-    command: sh -c "Xvfb :99 -screen 0 1920x1080x16 & uv"
+    entrypoint: [ "/usr/bin/tini", "--" ]
+    command: xvfb-run --auto-servernum --server-num=1 --server-args='-screen 0, 1920x1080x24' uv run hc dataset check
