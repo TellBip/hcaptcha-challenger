@@ -1,21 +1,19 @@
 # https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#dependencies-optional-dependencies
 [project]
 name = "hcaptcha-challenger"
-version = "0.18.9"
+version = "0.18.10"
 dependencies = [
     "pytz",
     "httpx[http2]",
     "loguru",
     "pydantic-settings",
     "playwright",
-    "opencv-python>=4.11.0.86,<5.0",
-    "numpy>2.0,<3.0",
+    "opencv-python>=4.11.0.88,<5.0",
     "pillow>=11.1.0",
     "msgpack>=1.1.1,<2.0.0",
-    "tenacity>=9.1.2",
     "typer>=0.15.4",
-    "google-genai>=1.20.0,<2.0.0",
     "matplotlib>=3.10.3,<4.0.0",
+    "google-genai>=1.26.0",
 ]
 requires-python = ">=3.10"
 authors = [
@@ -108,9 +106,9 @@ dev = [
     "ipykernel>=6.29.5",
     "ipywidgets>=8.1.7",
     "jupyterlab-language-pack-zh-cn>=4.4.post0",
-    "notebook>=7.4.3",
+    "notebook>=7.4.4",
     "pip>=25.1.1",
-    "pytest>=8.4.0",
-    "pytest-asyncio>=1.0.0",
+    "pytest>=8.4.1",
+    "pytest-asyncio>=1.1.0",
     "uv-dynamic-versioning>=0.8.2",
 ]

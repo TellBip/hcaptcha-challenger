@@ -16,7 +16,7 @@ async def challenge(page: Page) -> AgentV:
     agent = AgentV(page=page, agent_config=agent_config)
 
     # In your real-world workflow, you may need to replace the `click_checkbox()`
-    # It may be to click the Login button or the Submit button to trigger challenge
+    # It may be to click the Login button or the Submit button to a trigger challenge
     await agent.robotic_arm.click_checkbox()
 
     # Wait for the challenge to appear and be ready for solving

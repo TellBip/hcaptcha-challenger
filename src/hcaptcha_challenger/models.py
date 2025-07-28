@@ -128,7 +128,7 @@ class CaptchaPayload(BaseModel):
 
 class CaptchaResponse(BaseModel):
 
-    c: Token
+    c: Token | None = Field(default_factory=dict)
     """
     type: hsw
     req: eyj0 ...

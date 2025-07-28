@@ -173,13 +173,22 @@ class AgentConfig(BaseSettings):
     )
 
     IMAGE_CLASSIFIER_THINKING_BUDGET: int = Field(
-        default=970, description="How many tokens should the thinking budget be?", le=32768, ge=128
+        default=970,
+        description="Indicates the thinking budget in tokens. 0 is DISABLED. -1 is AUTOMATIC. The default values and allowed ranges are model dependent.",
+        le=32768,
+        ge=128,
     )
     SPATIAL_POINT_THINKING_BUDGET: int = Field(
-        default=1387, description="How many tokens should the thinking budget be?", le=32768, ge=128
+        default=1387,
+        description="Indicates the thinking budget in tokens. 0 is DISABLED. -1 is AUTOMATIC. The default values and allowed ranges are model dependent.",
+        le=32768,
+        ge=128,
     )
     SPATIAL_PATH_THINKING_BUDGET: int = Field(
-        default=1652, description="How many tokens should the thinking budget be?", le=32768, ge=128
+        default=4096,
+        description="Indicates the thinking budget in tokens. 0 is DISABLED. -1 is AUTOMATIC. The default values and allowed ranges are model dependent.",
+        le=32768,
+        ge=128,
     )
 
     coordinate_grid: CoordinateGrid | None = Field(default_factory=CoordinateGrid)

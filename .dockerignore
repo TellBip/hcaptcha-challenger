@@ -37,10 +37,6 @@ build/
 .pybuilder/
 target/
 
-#README.md
-#LICENSE
-#*.md
-
 .hypothesis/
 htmlcov/
 cover/
@@ -53,3 +49,8 @@ coverage.xml
 Thumbs.db
 *.tmp
 *.temp
+
+scripts/
+tests/
+examples/
+docs/
