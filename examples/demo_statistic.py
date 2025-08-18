@@ -132,7 +132,7 @@ for challenge_type, counts_list in sorted(all_token_counts.items()):
         'stats': stats,
     }
 
-console.print(f"[green]✔[/green] Step 2 finished. Analysis complete.\n")
+console.print("[green]✔[/green] Step 2 finished. Analysis complete.\n")
 
 
 # --- Step 3: Formatted Output ---

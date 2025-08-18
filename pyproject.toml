@@ -3,17 +3,17 @@
 name = "hcaptcha-challenger"
 version = "0.18.10"
 dependencies = [
-    "pytz",
-    "httpx[http2]",
-    "loguru",
-    "pydantic-settings",
     "playwright",
     "opencv-python>=4.11.0.88,<5.0",
     "pillow>=11.1.0",
     "msgpack>=1.1.1,<2.0.0",
     "typer>=0.15.4",
-    "matplotlib>=3.10.3,<4.0.0",
-    "google-genai>=1.26.0",
+    "matplotlib>=3.10.3",
+    "google-genai>=1.30.0",
+    "pytz>=2025.2",
+    "httpx[http2]>=0.28.1",
+    "loguru>=0.7.3",
+    "pydantic-settings>=2.10.1",
 ]
 requires-python = ">=3.10"
 authors = [
@@ -70,7 +70,7 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.sdist]
 only-include = ["src/hcaptcha_challenger"]
 exclude = [
-    "_archive/*.py",
+    "archive/*.py",
     'tests/',
     'docker/',
     'examples/'
@@ -90,7 +90,7 @@ filterwarnings = "ignore::DeprecationWarning"
 line-length = 100
 target-version = ["py310", "py311", "py312", "py313"]
 skip-string-normalization = true
-exclude = "_archive|.venv|docs/.*\\.ipynb"
+exclude = "archive|.venv|docs/.*\\.ipynb"
 
 [tool.hatch.version]
 source = "uv-dynamic-versioning"
@@ -100,15 +100,19 @@ vcs = "git"
 style = "pep440"
 bump = true
 
+[tool.ruff]
+exclude = ["archive/", "*.ipynb"]
+
 [dependency-groups]
 dev = [
-    "black>=25.1.0",
-    "ipykernel>=6.29.5",
+    "black[jupyter]>=25.1.0",
+    "ipykernel>=6.30.1",
     "ipywidgets>=8.1.7",
-    "jupyterlab-language-pack-zh-cn>=4.4.post0",
-    "notebook>=7.4.4",
-    "pip>=25.1.1",
+    "jupyterlab-language-pack-zh-cn>=4.4.post1",
+    "notebook>=7.4.5",
+    "pip>=25.2",
     "pytest>=8.4.1",
     "pytest-asyncio>=1.1.0",
-    "uv-dynamic-versioning>=0.8.2",
+    "ruff>=0.12.9",
+    "uv-dynamic-versioning>=0.10.0",
 ]

@@ -3,8 +3,10 @@ from abc import abstractmethod, ABC
 from pathlib import Path
 from typing import TypeVar, Generic
 
+from google.genai.types import ThinkingConfig
 from loguru import logger
 
+from hcaptcha_challenger.models import THINKING_BUDGET_MODELS
 from hcaptcha_challenger.tools.common import run_sync
 
 M = TypeVar("M")
@@ -33,6 +35,22 @@ class _Reasoner(ABC, Generic[M]):
     @abstractmethod
     async def invoke_async(self, *args, **kwargs):
         raise NotImplementedError
+
+    @staticmethod
+    def _pin_thinking_config(
+        model_to_use: str, thinking_budget: int | None = None
+    ) -> ThinkingConfig | None:
+        try:
+            if model_to_use not in THINKING_BUDGET_MODELS or not isinstance(thinking_budget, int):
+                return
+            # Must turn on spatial reasoning
+            if model_to_use.startswith("gemini-2.5-pro") and thinking_budget == 0:
+                thinking_budget = -1
+            if thinking_budget < -1 or thinking_budget > 32768:
+                thinking_budget = -1
+            return ThinkingConfig(include_thoughts=False, thinking_budget=thinking_budget)
+        except Exception as err:
+            logger.warning(f"Error resetting thinking config: {str(err)}")
 
     # for backward compatibility
     def invoke(self, *args, **kwargs):

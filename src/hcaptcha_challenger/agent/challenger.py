@@ -176,19 +176,19 @@ class AgentConfig(BaseSettings):
         default=970,
         description="Indicates the thinking budget in tokens. 0 is DISABLED. -1 is AUTOMATIC. The default values and allowed ranges are model dependent.",
         le=32768,
-        ge=128,
+        ge=-1,
     )
     SPATIAL_POINT_THINKING_BUDGET: int = Field(
         default=1387,
         description="Indicates the thinking budget in tokens. 0 is DISABLED. -1 is AUTOMATIC. The default values and allowed ranges are model dependent.",
         le=32768,
-        ge=128,
+        ge=-1,
     )
     SPATIAL_PATH_THINKING_BUDGET: int = Field(
-        default=4096,
+        default=-1,
         description="Indicates the thinking budget in tokens. 0 is DISABLED. -1 is AUTOMATIC. The default values and allowed ranges are model dependent.",
         le=32768,
-        ge=128,
+        ge=-1,
     )
 
     coordinate_grid: CoordinateGrid | None = Field(default_factory=CoordinateGrid)

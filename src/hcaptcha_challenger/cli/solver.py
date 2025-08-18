@@ -161,7 +161,6 @@ def check_cost(
 
         # Add a total row
         if "Total" in stats.model_details:
-            total_data = stats.model_details["Total"]
             model_table.add_row(
                 "[bold]Total[/bold]",
                 f"[bold]{stats.total_files:,}[/bold]",

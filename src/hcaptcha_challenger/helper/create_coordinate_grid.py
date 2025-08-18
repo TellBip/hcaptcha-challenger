@@ -38,7 +38,7 @@ def _create_adaptive_contrast_grid(
         x, y, width, height = bbox
 
     gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-    avg_brightness = np.mean(gray) / 255.0
+    avg_brightness = np.mean(gray) / 255
 
     grid_color = 'black' if avg_brightness > 0.5 else 'white'
 
@@ -46,13 +46,13 @@ def _create_adaptive_contrast_grid(
 
     fig, ax = plt.subplots(figsize=(10, 10))
 
-    ax.imshow(img, extent=[x, x + width, y + height, y])
+    ax.imshow(img, extent=(x, x + width, y + height, y))
 
     ax.set_xlim(x, x + width)
     ax.set_ylim(y + height, y)
 
-    ax.spines['left'].set_position(('data', x))
-    ax.spines['bottom'].set_position(('data', y + height))
+    ax.spines['left'].set_position(('data', x))  # type: ignore[arg-type]
+    ax.spines['bottom'].set_position(('data', y + height))  # type: ignore[arg-type]
 
     for spine in ax.spines.values():
         spine.set_color(grid_color)
@@ -85,9 +85,9 @@ def _create_adaptive_contrast_grid(
             cell_color = colors(color_idx / n_colors)
             ax.add_patch(
                 plt.Rectangle(
-                    (x_val, y_val),
-                    x_ticks[i + 1] - x_val,
-                    y_ticks[j + 1] - y_val,
+                    (x_val, y_val),  # type: ignore[arg-type]
+                    x_ticks[i + 1] - x_val,  # type: ignore[arg-type]
+                    y_ticks[j + 1] - y_val,  # type: ignore[arg-type]
                     fill=True,
                     alpha=0.15,
                     color=cell_color,
@@ -103,7 +103,10 @@ def _create_adaptive_contrast_grid(
     plt.tight_layout()
 
     fig.canvas.draw()
-    img_with_grid = np.array(fig.canvas.renderer.buffer_rgba())
+    # Get the RGBA buffer from the figure
+    buf = fig.canvas.buffer_rgba()  # type: ignore[attr-defined]
+    img_with_grid = np.frombuffer(buf, dtype=np.uint8)
+    img_with_grid = img_with_grid.reshape(fig.canvas.get_width_height()[::-1] + (4,))
 
     plt.close(fig)
 
@@ -156,15 +159,15 @@ def create_coordinate_grid(
     fig, ax = plt.subplots(figsize=(10, 10))
 
     # Display the image
-    ax.imshow(img, extent=[x, x + width, y + height, y])  # Note the y-axis inversion
+    ax.imshow(img, extent=(x, x + width, y + height, y))  # Note the y-axis inversion
 
     # Set axis limits
     ax.set_xlim(x, x + width)
     ax.set_ylim(y + height, y)  # Inverted y-axis to match image coordinates
 
-    # Set origin at the top-left corner
-    ax.spines['left'].set_position(('data', x))
-    ax.spines['bottom'].set_position(('data', y + height))
+    # Set origin in the top-left corner
+    ax.spines['left'].set_position(('data', x))  # type: ignore[arg-type]
+    ax.spines['bottom'].set_position(('data', y + height))  # type: ignore[arg-type]
 
     # Remove top and right spines
     ax.spines['top'].set_visible(False)
@@ -202,7 +205,10 @@ def create_coordinate_grid(
 
     # Convert matplotlib figure to numpy array
     fig.canvas.draw()
-    img_with_grid = np.array(fig.canvas.renderer.buffer_rgba())
+    # Get the RGBA buffer from the figure
+    buf = fig.canvas.buffer_rgba()  # type: ignore[attr-defined]
+    img_with_grid = np.frombuffer(buf, dtype=np.uint8)
+    img_with_grid = img_with_grid.reshape(fig.canvas.get_width_height()[::-1] + (4,))
 
     # Close the figure to free memory
     plt.close(fig)

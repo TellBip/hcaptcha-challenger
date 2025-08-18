@@ -87,7 +87,7 @@ async def _create_and_monitor_progress(collector: Collector, max_loops: int):
                 current_request_type = collector.current_request_type
 
                 if current_progress != last_progress or current_request_type != last_request_type:
-                    desc = f"[cyan]Collecting"
+                    desc = "[cyan]Collecting"
                     if current_request_type:
                         desc += f" - type: {current_request_type}"
 

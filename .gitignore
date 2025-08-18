@@ -7,7 +7,8 @@ __pycache__/
 *.so
 
 # VSCode
-.vscode/
+.vscode/*
+!.vscode/settings.json
 
 # Distribution / packaging
 .Python
@@ -72,7 +73,7 @@ instance/
 .scrapy
 
 # Sphinx documentation
-_archive/docs/_build/
+archive/docs/_build/
 
 # PyBuilder
 target/
@@ -151,15 +152,15 @@ examples/*.png
 **/figs-seg-out**
 tests_private/
 .run/
-_archive/assets/image_label_binary/off_road_vehicle/yes
-_archive/assets/image_label_binary/off_road_vehicle/bad
-_archive/assets/image_label_binary/off_road_vehicle/20**
+archive/assets/image_label_binary/off_road_vehicle/yes
+archive/assets/image_label_binary/off_road_vehicle/bad
+archive/assets/image_label_binary/off_road_vehicle/20**
 profile_pluggable_model.md
 ./*.png
 tests/record_json
 logs
 examples/*.md
-_archive/docs/logs/
+archive/docs/logs/
 docs/_build/
 node_modules
 pnpm-lock.yaml
@@ -176,3 +177,5 @@ tests/dataset/
 docs/assets/2d_spatial_understanding
 docs/assets/3d_spatial_understanding
 generate_content
+
+docs/assets/**/coordinate_grid*.png
